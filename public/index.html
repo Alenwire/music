@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <title>我的音乐播放器</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            background: #f7f7f7;
+        }
+        input {
+            width: 300px;
+            padding: 8px;
+        }
+        button {
+            padding: 8px 16px;
+            margin-left: 10px;
+        }
+        li {
+            margin: 5px 0;
+            cursor: pointer;
+            padding: 5px;
+            background: #fff;
+            border-radius: 4px;
+            list-style: none;
+        }
+        li:hover {
+            background: #e3e3e3;
+        }
+        .active {
+            font-weight: bold;
+            color: #d9534f;
+            background: #ffecec !important;
+        }
+    </style>
+</head>
+<body>
+
+<h2>音乐播放器 🎶</h2>
+
+<input id="url" placeholder="输入 B站链接，例如：https://www.bilibili.com/video/xxx">
+<button onclick="addMusic()">添加</button>
+
+<h3>播放列表</h3>
+
+<button id="modeBtn" onclick="switchMode()">🔂 列表循环</button>
+
+<ul id="playlist"></ul>
+
+<audio id="player" controls style="width: 100%; margin-top: 20px;"></audio>
+
+
+<!-- ============================  
+        播放器核心逻辑  
+     ============================ -->
+<script>
+// 播放列表
+let playlist = JSON.parse(localStorage.getItem("playlist") || "[]");
+// 播放模式：list=列表循环 / single=单曲 / order=顺序
+let mode = localStorage.getItem("mode") || "list";
+// 当前播放编号
+let current = parseInt(localStorage.getItem("current") || "-1");
+
+const playlistEl = document.getElementById("playlist");
+const player = document.getElementById("player");
+
+// 初始化
+renderPlaylist();
+updateModeButton();
+
+// 如果之前有播放，则恢复
+if (current >= 0 && playlist[current]) {
+    player.src = "/proxy?url=" + encodeURIComponent(playlist[current].audio);
+}
+
+// 添加音乐
+async function addMusic() {
+    const url = document.getElementById("url").value.trim();
+    if (!url) return alert("请输入链接");
+
+    const res = await fetch(`/api/audio?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+
+    if (!data.success) return alert("解析失败");
+
+    playlist.push({ title: data.title, audio: data.audio });
+    localStorage.setItem("playlist", JSON.stringify(playlist));
+
+    renderPlaylist();
+    document.getElementById("url").value = "";
+}
+
+// 更新播放模式按钮
+function updateModeButton() {
+    const btn = document.getElementById("modeBtn");
+    if (mode === "single") btn.innerText = "🔁 单曲循环";
+    else if (mode === "list") btn.innerText = "🔂 列表循环";
+    else btn.innerText = "➡ 顺序播放";
+}
+
+// 切换模式
+function switchMode() {
+    if (mode === "list") mode = "single";
+    else if (mode === "single") mode = "order";
+    else mode = "list";
+
+    localStorage.setItem("mode", mode);
+    updateModeButton();
+}
+
+// 播放指定 index
+function playIndex(i) {
+    current = i;
+    localStorage.setItem("current", current);
+
+    player.src = "/proxy?url=" + encodeURIComponent(playlist[i].audio);
+    player.play();
+
+    renderPlaylist();
+}
+
+// 渲染列表
+function renderPlaylist() {
+    playlistEl.innerHTML = "";
+
+    playlist.forEach((item, i) => {
+        const li = document.createElement("li");
+        li.innerText = item.title;
+
+        // 当前播放高亮
+        if (i === current) li.classList.add("active");
+
+        li.onclick = () => playIndex(i);
+        playlistEl.appendChild(li);
+    });
+}
+
+// 自动下一曲
+player.addEventListener("ended", () => {
+    if (mode === "single") {
+        player.play();
+        return;
+    }
+
+    if (mode === "list") {
+        current = (current + 1) % playlist.length;
+    } else if (mode === "order") {
+        current++;
+        if (current >= playlist.length) return; // 直接停止
+    }
+
+    localStorage.setItem("current", current);
+    playIndex(current);
+});
+</script>
+
+</body>
+</html>
